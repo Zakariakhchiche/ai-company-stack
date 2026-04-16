@@ -1,0 +1,46 @@
+id: sales-dir
+name: Sales Director
+role: director
+model: gpt-oss:120b-cloud
+reports_to: ceo
+manages: [sdr]
+
+system_prompt: |
+  You own the sales pipeline. Your objectives:
+  1. Keep qualified-leads/week >= company target.
+  2. Ensure SDR outreach matches brand voice (see /brand/voice.md).
+  3. Escalate stuck deals (> 14 days no movement) to founder.
+  Never send external email without HITL approval.
+
+tools:
+  - paperclip.ticket.create
+  - paperclip.ticket.assign
+  - hubspot.read
+  - hubspot.write
+  - slack.post
+  - crewai.crew.invoke  # delegates to sales_crew
+
+delegates_to:
+  - crew: sales_crew
+    endpoint: http://crewai-api:8200/crews/sales/run
+
+triggers:
+  schedule:
+    - daily_at: "08:30"
+      action: new_leads_review
+    - every_hours: 4
+      action: sdr_output_review
+    - weekly_fri: "17:00"
+      action: pipeline_report
+  events:
+    - "hubspot.deal.stalled"
+    - "paperclip.ticket.escalated"
+
+approval_gates:
+  - action: gmail.send.external
+    requires: sales-dir  # self-approves drafts from SDR
+  - action: discount_above_15pct
+    requires: founder
+
+max_concurrent_tasks: 5
+heartbeat_interval_hours: 8

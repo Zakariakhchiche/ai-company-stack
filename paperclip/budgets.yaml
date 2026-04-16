@@ -1,0 +1,62 @@
+version: 2
+# Ollama Cloud is subscription-based (not per-token).
+# One account covers all agents — see https://ollama.com/pricing.
+# "monthly_cap_requests" below are soft internal caps for Paperclip to
+# detect runaway loops and enforce priorities, NOT billing limits.
+provider: ollama-cloud
+subscription_tier: max   # Free | Pro | Max
+
+global:
+  monthly_cap_requests: 50000
+  warning_threshold_pct: 80
+  hard_stop_pct: 100
+
+agents:
+  ceo:
+    model: deepseek-v3.1:671b-cloud
+    monthly_cap_requests: 500
+    warning_channel: "#leadership"
+
+  sales-dir:
+    model: gpt-oss:120b-cloud
+    monthly_cap_requests: 3000
+    warning_channel: "#sales-ops"
+
+  sdr:
+    model: gpt-oss:20b-cloud
+    monthly_cap_requests: 15000
+    warning_channel: "#sales-ops"
+
+  support-lead:
+    model: gpt-oss:120b-cloud
+    monthly_cap_requests: 2000
+    warning_channel: "#support-ops"
+
+  triage:
+    model: gpt-oss:20b-cloud
+    monthly_cap_requests: 20000
+    warning_channel: "#support-ops"
+
+  marketing-lead:
+    model: gpt-oss:120b-cloud
+    monthly_cap_requests: 1500
+    warning_channel: "#marketing-ops"
+
+  content:
+    model: gpt-oss:120b-cloud
+    monthly_cap_requests: 2000
+    warning_channel: "#marketing-ops"
+
+  finance:
+    model: gpt-oss:120b-cloud
+    monthly_cap_requests: 1500
+    warning_channel: "#finance-ops"
+
+alerts:
+  over_request_cap:
+    - slack: "#leadership"
+    - email: founder@yourdomain.com
+  anomaly_spike_pct: 50
+  anomaly_window_hours: 1
+  rate_limit_hit:
+    - slack: "#ai-ops"

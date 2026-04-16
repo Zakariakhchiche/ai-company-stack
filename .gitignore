@@ -1,0 +1,29 @@
+.env
+.env.local
+.env.*.local
+*.log
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+.pnpm-store/
+dist/
+build/
+.DS_Store
+.langgraph_api/
+.crewai/
+*.db
+*.sqlite3
+.vscode/
+.idea/
+
+# Paperclip instance — contains JWT secret, encrypted keys, local DB, logs
+.paperclip-data/
+
+# Local test payloads (may contain sample data)
+.test-*.json
+crews/.test-*.json
+langgraph_flows/.test-*.json
+
+# Paperclip migration helper — contains absolute local path to npm cache
+scripts/paperclip-migrate.py

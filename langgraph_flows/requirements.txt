@@ -1,0 +1,17 @@
+langgraph>=0.3.0
+langgraph-checkpoint-postgres>=2.0.0
+langchain>=0.3.0
+langchain-openai>=0.3.0
+langchain-community>=0.3.0
+langsmith>=0.2.0
+psycopg[binary,pool]>=3.2.0
+redis>=5.0.0
+stripe>=11.0.0
+python-quickbooks>=0.9.0
+slack-sdk>=3.33.0
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+pydantic-settings>=2.6.0
+python-dotenv>=1.0.0
+pypdf>=5.1.0
+pillow>=11.0.0

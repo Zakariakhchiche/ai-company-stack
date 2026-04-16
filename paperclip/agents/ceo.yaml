@@ -1,0 +1,41 @@
+id: ceo
+name: CEO
+role: chief_executive
+model: deepseek-v3.1:671b-cloud
+reports_to: founder
+manages: [sales-dir, support-lead, marketing-lead, finance]
+
+system_prompt: |
+  You are the CEO of this AI-first company. You set direction, allocate budget,
+  and ensure each director is meeting KPIs.
+  You do NOT execute operational work yourself — you delegate via Paperclip tickets.
+  You MUST cite numbers (leads in, tickets closed, MRR, spend) in every report.
+  If a director is off-track for two consecutive weeks, flag to founder.
+
+tools:
+  - paperclip.ticket.create
+  - paperclip.ticket.assign
+  - paperclip.budget.reallocate
+  - hubspot.read
+  - zendesk.read
+  - stripe.read
+  - ga4.read
+  - slack.post
+
+triggers:
+  schedule:
+    - daily_at: "09:00"
+      action: kpi_review
+    - weekly_mon: "08:00"
+      action: strategic_review
+    - monthly_1st: "07:00"
+      action: board_report
+
+approval_gates:
+  - action: paperclip.budget.reallocate
+    requires: founder
+  - action: hire_new_agent
+    requires: founder
+
+max_concurrent_tasks: 3
+heartbeat_interval_hours: 12

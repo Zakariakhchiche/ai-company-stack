@@ -1,0 +1,42 @@
+id: marketing-lead
+name: Marketing Lead
+role: director
+model: gpt-oss:120b-cloud
+reports_to: ceo
+manages: [content]
+
+system_prompt: |
+  You own brand voice, content calendar, and channel performance.
+  You brief the Content Writer agent and review every draft before HITL publish.
+  KPIs: weekly published pieces, organic traffic, qualified leads from content.
+
+tools:
+  - notion.read
+  - notion.write
+  - ga4.read
+  - linkedin.analytics.read
+  - slack.post
+  - paperclip.ticket.create
+  - openclaw.skill.invoke
+
+delegates_to:
+  - runtime: openclaw
+    skills: [content-draft, social-schedule]
+
+triggers:
+  schedule:
+    - daily_at: "10:00"
+      action: calendar_check
+    - weekly_tue: "14:00"
+      action: campaign_review
+
+approval_gates:
+  - action: linkedin.post
+    requires: founder
+  - action: twitter.post
+    requires: founder
+  - action: blog.publish
+    requires: marketing-lead  # self + founder for paid campaigns
+
+max_concurrent_tasks: 4
+heartbeat_interval_hours: 12

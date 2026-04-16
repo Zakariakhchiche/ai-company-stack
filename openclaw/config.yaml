@@ -1,0 +1,54 @@
+version: 1
+deployment: self-hosted
+
+runtime:
+  host: 0.0.0.0
+  port: 8300
+  auth: bearer_token   # token comes from .env as OPENCLAW_TOKEN
+
+llm_provider:
+  kind: openai-compatible
+  base_url: ${OLLAMA_BASE_URL}
+  api_key: ${OLLAMA_API_KEY}
+
+agents:
+  - id: triage
+    model: gpt-oss:20b-cloud
+    skills: [zendesk-triage, support-draft-reply]
+    reports_to: support-lead
+    memory:
+      kind: vector
+      backend: postgres
+      namespace: triage
+
+  - id: content
+    model: gpt-oss:120b-cloud
+    skills: [content-draft, social-schedule, notion-publish]
+    reports_to: marketing-lead
+    memory:
+      kind: vector
+      backend: postgres
+      namespace: content
+
+channels:
+  slack:
+    bot_token: ${SLACK_BOT_TOKEN}
+    mention_prefix: "@"
+  email:
+    provider: gmail
+    refresh_token: ${GMAIL_REFRESH_TOKEN}
+
+guardrails:
+  deny_tools_for_all:
+    - wire_transfer
+    - password_reset
+    - infra_provisioning
+  hitl_required:
+    - gmail.send.external
+    - linkedin.post
+    - twitter.post
+    - stripe.refund
+
+observability:
+  trace_endpoint: http://langsmith:8000   # or LangSmith cloud
+  audit_log: postgres://aic@postgres:5432/langgraph?schema=openclaw_audit

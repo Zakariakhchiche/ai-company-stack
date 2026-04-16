@@ -1,0 +1,8 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "finance_approval": "./finance_approval/graph.py:build_graph",
+    "contract_review": "./contract_review/graph.py:build_graph"
+  },
+  "env": "../.env"
+}
