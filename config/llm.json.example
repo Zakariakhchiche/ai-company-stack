@@ -1,0 +1,8 @@
+{
+  "ollama_api_key": "",
+  "ollama_base_url": "https://ollama.com/v1",
+  "ollama_model_heavy": "deepseek-v3.1:671b-cloud",
+  "ollama_model_mid": "gpt-oss:120b-cloud",
+  "ollama_model_light": "gpt-oss:20b-cloud",
+  "ollama_model_code": "qwen3-coder:480b-cloud"
+}

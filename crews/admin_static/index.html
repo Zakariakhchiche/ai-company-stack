@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AI Company &middot; Ollama Cloud config</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; margin-bottom: .25rem; }
+  p.lede { color: #666; margin-top: 0; }
+  fieldset { border: 1px solid #ccc; border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
+  legend { padding: 0 .5rem; font-weight: 600; }
+  label { display: block; font-size: .85rem; margin: .75rem 0 .25rem; font-weight: 500; }
+  input[type=text], input[type=password], input[type=url] {
+    width: 100%; padding: .5rem .6rem; font-size: .95rem; box-sizing: border-box;
+    border: 1px solid #bbb; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, monospace;
+  }
+  button { padding: .55rem 1.1rem; font-size: .95rem; border-radius: 4px; border: 1px solid #333; background: #111; color: #fff; cursor: pointer; margin-right: .5rem; }
+  button.secondary { background: #fff; color: #111; }
+  button:disabled { opacity: .5; cursor: wait; }
+  .msg { padding: .6rem .8rem; border-radius: 4px; margin-top: 1rem; font-size: .9rem; white-space: pre-wrap; font-family: ui-monospace, monospace; }
+  .msg.ok { background: #e6f4ea; color: #1e4620; }
+  .msg.err { background: #fce8e6; color: #7a1c13; }
+  .hint { font-size: .8rem; color: #777; margin-top: .15rem; }
+  .pill { display: inline-block; background: #eef; color: #335; border-radius: 12px; padding: .1rem .55rem; font-size: .7rem; margin-left: .4rem; vertical-align: middle; }
+</style>
+</head>
+<body>
+<h1>Ollama Cloud &mdash; configuration LLM</h1>
+<p class="lede">Ces valeurs sont persistées dans <code>config/llm.json</code> et remplacent celles du <code>.env</code>. Les agents les prennent en compte au prochain appel, sans redémarrage.</p>
+
+<fieldset>
+  <legend>Authentification admin</legend>
+  <label for="admin-token">Admin token (header <code>Authorization: Bearer ...</code>)</label>
+  <input id="admin-token" type="password" autocomplete="off" placeholder="ADMIN_TOKEN" />
+  <p class="hint">Défini côté serveur via la variable d'env <code>ADMIN_TOKEN</code>. Stocké uniquement dans <code>sessionStorage</code>.</p>
+  <button type="button" id="load-btn" class="secondary">Charger la config actuelle</button>
+</fieldset>
+
+<form id="cfg-form">
+<fieldset>
+  <legend>Endpoint Ollama Cloud</legend>
+  <label for="ollama_base_url">Base URL</label>
+  <input id="ollama_base_url" name="ollama_base_url" type="url" placeholder="https://ollama.com/v1" />
+  <label for="ollama_api_key">API key <span class="pill">laisser vide pour ne pas changer</span></label>
+  <input id="ollama_api_key" name="ollama_api_key" type="password" autocomplete="off" placeholder="OLLAMA_API_KEY" />
+</fieldset>
+
+<fieldset>
+  <legend>Mapping des modèles</legend>
+  <label for="ollama_model_heavy">Heavy (CEO, contract, risk)</label>
+  <input id="ollama_model_heavy" name="ollama_model_heavy" type="text" placeholder="deepseek-v3.1:671b-cloud" />
+  <label for="ollama_model_mid">Mid (directors, writing)</label>
+  <input id="ollama_model_mid" name="ollama_model_mid" type="text" placeholder="gpt-oss:120b-cloud" />
+  <label for="ollama_model_light">Light (triage, routing)</label>
+  <input id="ollama_model_light" name="ollama_model_light" type="text" placeholder="gpt-oss:20b-cloud" />
+  <label for="ollama_model_code">Code</label>
+  <input id="ollama_model_code" name="ollama_model_code" type="text" placeholder="qwen3-coder:480b-cloud" />
+</fieldset>
+
+<button type="submit" id="save-btn">Enregistrer</button>
+<button type="button" id="test-btn" class="secondary">Tester la connexion</button>
+</form>
+
+<div id="msg"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const msg = (text, ok) => {
+  const el = $("msg");
+  el.className = "msg " + (ok ? "ok" : "err");
+  el.textContent = text;
+};
+const token = () => {
+  const t = $("admin-token").value.trim() || sessionStorage.getItem("admin_token") || "";
+  if (t) sessionStorage.setItem("admin_token", t);
+  return t;
+};
+const initToken = () => {
+  const t = sessionStorage.getItem("admin_token");
+  if (t) $("admin-token").value = t;
+};
+initToken();
+
+async function api(path, opts = {}) {
+  const t = token();
+  if (!t) throw new Error("Admin token requis");
+  const res = await fetch(path, {
+    ...opts,
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + t, ...(opts.headers || {}) },
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail || res.statusText);
+  return body;
+}
+
+async function load() {
+  try {
+    const data = await api("/admin/api/llm");
+    const eff = data.effective;
+    $("ollama_base_url").value = eff.ollama_base_url || "";
+    $("ollama_model_heavy").value = eff.ollama_model_heavy || "";
+    $("ollama_model_mid").value = eff.ollama_model_mid || "";
+    $("ollama_model_light").value = eff.ollama_model_light || "";
+    $("ollama_model_code").value = eff.ollama_model_code || "";
+    $("ollama_api_key").value = "";
+    $("ollama_api_key").placeholder = eff.ollama_api_key ? "actuelle: " + eff.ollama_api_key : "OLLAMA_API_KEY";
+    msg("Config chargée. Overrides actifs: " + (data.overridden_fields.join(", ") || "(aucun, fallback env)"), true);
+  } catch (e) { msg(e.message, false); }
+}
+
+$("load-btn").onclick = load;
+
+$("cfg-form").onsubmit = async (e) => {
+  e.preventDefault();
+  const btn = $("save-btn"); btn.disabled = true;
+  try {
+    const payload = {};
+    for (const f of ["ollama_base_url","ollama_api_key","ollama_model_heavy","ollama_model_mid","ollama_model_light","ollama_model_code"]) {
+      const v = $(f).value.trim();
+      if (v) payload[f] = v;
+    }
+    const res = await api("/admin/api/llm", { method: "POST", body: JSON.stringify(payload) });
+    msg("Enregistré. Champs overridés: " + (res.saved.join(", ") || "(aucun)"), true);
+    await load();
+  } catch (e) { msg(e.message, false); }
+  finally { btn.disabled = false; }
+};
+
+$("test-btn").onclick = async () => {
+  const btn = $("test-btn"); btn.disabled = true;
+  try {
+    const res = await api("/admin/api/llm/test", { method: "POST" });
+    msg(JSON.stringify(res, null, 2), res.ok);
+  } catch (e) { msg(e.message, false); }
+  finally { btn.disabled = false; }
+};
+
+load().catch(() => {});
+</script>
+</body>
+</html>
