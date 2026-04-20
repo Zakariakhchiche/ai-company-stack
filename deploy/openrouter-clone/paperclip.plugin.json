@@ -1,0 +1,34 @@
+{
+  "$schema": "https://paperclipai.com/schemas/plugin-manifest.json",
+  "type": "adapter",
+  "id": "ollama-cloud",
+  "name": "Ollama Cloud + DeepSeek",
+  "description": "Dual-provider adapter — hardcoded catalog of Ollama Cloud and DeepSeek models, selectable from the onboarding wizard and agent-creation UI",
+  "version": "1.1.0",
+  "entry": {
+    "adapter": "./src/index.ts"
+  },
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "model": {
+        "type": "string",
+        "description": "Model id — Ollama Cloud (e.g. gpt-oss:120b-cloud) or deepseek/ prefixed",
+        "default": "gpt-oss:120b-cloud"
+      },
+      "ollamaApiKey": {
+        "type": "string",
+        "description": "Ollama Cloud API key. Falls back to OLLAMA_API_KEY env var."
+      },
+      "deepseekApiKey": {
+        "type": "string",
+        "description": "DeepSeek API key. Falls back to DEEPSEEK_API_KEY env var."
+      },
+      "maxTokens": {
+        "type": "number",
+        "description": "Maximum tokens to generate",
+        "default": 4096
+      }
+    }
+  }
+}

@@ -19,6 +19,11 @@ build/
 
 # Paperclip instance — contains JWT secret, encrypted keys, local DB, logs
 .paperclip-data/
+local-runtime/
+
+# Local deployment artifacts not meant for the repo
+deploy/screenshot-*.png
+deploy/pclog.json
 
 # Local test payloads (may contain sample data)
 .test-*.json
