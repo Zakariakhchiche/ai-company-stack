@@ -30,6 +30,7 @@ if (!nodeModulesDir) {
 const hermesPath = path.join(nodeModulesDir, "hermes-paperclip-adapter/dist/server/index.js");
 const hermesConstantsPath = path.join(nodeModulesDir, "hermes-paperclip-adapter/dist/shared/constants.js");
 const hermesExecutePath = path.join(nodeModulesDir, "hermes-paperclip-adapter/dist/server/execute.js");
+const hermesBuildConfigPath = path.join(nodeModulesDir, "hermes-paperclip-adapter/dist/ui/build-config.js");
 const registryPath = path.join(nodeModulesDir, "@paperclipai/server/dist/adapters/registry.js");
 const routesPath = path.join(nodeModulesDir, "@paperclipai/server/dist/routes/adapters.js");
 
@@ -172,6 +173,41 @@ if (!hermesExecuteSrc.includes(curlAuth)) {
 }
 
 writeIfChanged(hermesExecutePath, hermesExecuteSrc, "hermes-execute");
+
+// ───────────────────────────────────────────────────────────────
+// 2c. hermes adapter ui/build-config.js — default provider to
+//     "ollama-cloud" so agents created from the Paperclip UI wizard
+//     ship with the right routing out of the box. Without this, the
+//     UI persists no provider and hermes falls back to modelInference
+//     (which picks zai for glm-*, anthropic for claude-*, etc. — and
+//     fails if that provider's key isn't configured).
+// ───────────────────────────────────────────────────────────────
+let hermesBuildConfigSrc = readMustExist(hermesBuildConfigPath);
+
+const providerDefaultMarker = `if (v.model.trim()) {
+        ac.model = v.model.trim();
+    }`;
+const providerDefaultReplacement = `if (v.model.trim()) {
+        ac.model = v.model.trim();
+    }
+    // PATCH: default provider so the Paperclip UI wizard produces agents
+    // that route correctly to Ollama Cloud. DeepSeek-prefixed models keep
+    // their explicit "deepseek" provider (handled in execute.ts).
+    if (!ac.provider) {
+        const m = (ac.model || "").toLowerCase();
+        ac.provider = m.startsWith("deepseek/") ? "deepseek" : "ollama-cloud";
+    }`;
+
+if (hermesBuildConfigSrc.includes("PATCH: default provider")) {
+  console.log("[hermes-buildconfig] already patched — skip");
+} else {
+  if (!hermesBuildConfigSrc.includes(providerDefaultMarker)) {
+    console.error("[hermes-buildconfig] marker not found");
+    process.exit(9);
+  }
+  hermesBuildConfigSrc = hermesBuildConfigSrc.replace(providerDefaultMarker, providerDefaultReplacement);
+  writeIfChanged(hermesBuildConfigPath, hermesBuildConfigSrc, "hermes-buildconfig");
+}
 
 // ───────────────────────────────────────────────────────────────
 // 3. paperclipai routes/adapters.js — async buildAdapterInfo + await Promise.all
