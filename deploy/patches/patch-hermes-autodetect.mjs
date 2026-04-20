@@ -29,6 +29,7 @@ if (!nodeModulesDir) {
 
 const hermesPath = path.join(nodeModulesDir, "hermes-paperclip-adapter/dist/server/index.js");
 const hermesConstantsPath = path.join(nodeModulesDir, "hermes-paperclip-adapter/dist/shared/constants.js");
+const hermesExecutePath = path.join(nodeModulesDir, "hermes-paperclip-adapter/dist/server/execute.js");
 const registryPath = path.join(nodeModulesDir, "@paperclipai/server/dist/adapters/registry.js");
 const routesPath = path.join(nodeModulesDir, "@paperclipai/server/dist/routes/adapters.js");
 
@@ -130,6 +131,47 @@ if (!registrySrc.includes(wireReplacement)) {
 }
 
 writeIfChanged(registryPath, registrySrc, "registry");
+
+// ───────────────────────────────────────────────────────────────
+// 2b. hermes adapter execute.js — inject PAPERCLIP_API_KEY JWT into
+//     the spawned hermes process AND add Authorization headers to
+//     every curl in the default prompt template. Without this,
+//     hermes's agent curls 401 against its own Paperclip API.
+// ───────────────────────────────────────────────────────────────
+let hermesExecuteSrc = readMustExist(hermesExecutePath);
+
+const authInjectMarker = `if (taskId)
+        env.PAPERCLIP_TASK_ID = taskId;
+    const userEnv = config.env;`;
+const authInjectReplacement = `if (taskId)
+        env.PAPERCLIP_TASK_ID = taskId;
+    if (ctx.authToken) {
+        env.PAPERCLIP_API_KEY = ctx.authToken;
+    }
+    const userEnv = config.env;`;
+
+if (hermesExecuteSrc.includes("env.PAPERCLIP_API_KEY = ctx.authToken")) {
+  console.log("[hermes-execute-authtoken] already patched — skip");
+} else {
+  if (!hermesExecuteSrc.includes(authInjectMarker)) {
+    console.error("[hermes-execute-authtoken] injection marker not found");
+    process.exit(8);
+  }
+  hermesExecuteSrc = hermesExecuteSrc.replace(authInjectMarker, authInjectReplacement);
+}
+
+// Add Authorization header to every `curl -s ` call in the prompt template.
+// Safe string replace — `curl -s ` is unique to the template lines.
+const curlPlain = 'curl -s ';
+const curlAuth = 'curl -s -H "Authorization: Bearer $PAPERCLIP_API_KEY" ';
+if (!hermesExecuteSrc.includes(curlAuth)) {
+  hermesExecuteSrc = hermesExecuteSrc.split(curlPlain).join(curlAuth);
+  console.log("[hermes-execute-curl-auth] patched");
+} else {
+  console.log("[hermes-execute-curl-auth] already patched — skip");
+}
+
+writeIfChanged(hermesExecutePath, hermesExecuteSrc, "hermes-execute");
 
 // ───────────────────────────────────────────────────────────────
 // 3. paperclipai routes/adapters.js — async buildAdapterInfo + await Promise.all
