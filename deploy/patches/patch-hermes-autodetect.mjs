@@ -35,6 +35,7 @@ const registryPath = path.join(nodeModulesDir, "@paperclipai/server/dist/adapter
 const routesPath = path.join(nodeModulesDir, "@paperclipai/server/dist/routes/adapters.js");
 const approvalsPath = path.join(nodeModulesDir, "@paperclipai/server/dist/services/approvals.js");
 const accessPath = path.join(nodeModulesDir, "@paperclipai/server/dist/routes/access.js");
+const heartbeatPath = path.join(nodeModulesDir, "@paperclipai/server/dist/services/heartbeat.js");
 
 function readMustExist(p) {
   if (!fs.existsSync(p)) {
@@ -321,6 +322,26 @@ if (accessSrc.includes('provider: "ollama-cloud"')) {
   }
   accessSrc = accessSrc.replace(accessMarker, accessReplacement);
   writeIfChanged(accessPath, accessSrc, "access");
+}
+
+// ───────────────────────────────────────────────────────────────
+// 6. paperclipai services/heartbeat.js — bump default
+//    maxConcurrentRuns from 1 to 4 so multiple agents can run in
+//    parallel instead of queuing behind each other.
+// ───────────────────────────────────────────────────────────────
+let heartbeatSrc = readMustExist(heartbeatPath);
+
+const hbMarker = "const HEARTBEAT_MAX_CONCURRENT_RUNS_DEFAULT = 1;";
+const hbReplacement = "const HEARTBEAT_MAX_CONCURRENT_RUNS_DEFAULT = 4;";
+
+if (heartbeatSrc.includes(hbReplacement)) {
+  console.log("[heartbeat] already patched — skip");
+} else if (!heartbeatSrc.includes(hbMarker)) {
+  console.error("[heartbeat] marker not found");
+  process.exit(12);
+} else {
+  heartbeatSrc = heartbeatSrc.replace(hbMarker, hbReplacement);
+  writeIfChanged(heartbeatPath, heartbeatSrc, "heartbeat");
 }
 
 console.log("done.");

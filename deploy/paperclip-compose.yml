@@ -1,10 +1,9 @@
 name: paperclip-stack
 services:
   paperclip:
-    image: ghcr.io/zakariakhchiche/ai-company-stack:latest
+    image: node:20-bookworm-slim
     container_name: pc_app
     restart: unless-stopped
-    pull_policy: always
     ports:
       - "3100:3100"
     environment:
@@ -14,6 +13,7 @@ services:
       PYTHONIOENCODING: utf-8
       PYTHONUTF8: "1"
       BETTER_AUTH_TRUSTED_ORIGINS: http://72.60.89.217:3100,http://localhost:3100,http://127.0.0.1:3100,http://srv1399420.hstgr.cloud:3100
+      HERMES_AUTODETECT_PATCH_URL: https://raw.githubusercontent.com/Zakariakhchiche/ai-company-stack/main/deploy/patches/patch-hermes-autodetect.mjs
     volumes:
       - /root/paperclip-data:/data
     command:
@@ -21,6 +21,14 @@ services:
       - -c
       - |
         set +e
+        apt-get update -qq
+        apt-get install -y --no-install-recommends -qq \
+          git ca-certificates curl python3 python3-pip python3-venv >/dev/null
+        npm install -g --silent paperclipai@latest typescript@5
+
+        pip3 install --break-system-packages --quiet \
+          git+https://github.com/NousResearch/hermes-agent 2>&1 | tail -2
+
         mkdir -p /data /home/node/.hermes
         chown -R node:node /data /home/node
 
@@ -39,6 +47,15 @@ services:
         OLLAMA_BASE_URL=https://ollama.com/v1
         EOF
         chown -R node:node /home/node/.hermes
+
+        PC_NM="$$(npm root -g)/paperclipai/node_modules"
+        if [ -d "$$PC_NM" ]; then
+          curl -sSfL "$$HERMES_AUTODETECT_PATCH_URL" -o /tmp/patch-hermes-autodetect.mjs
+          if [ -s /tmp/patch-hermes-autodetect.mjs ]; then
+            echo ">> patching paperclipai at $$PC_NM"
+            node /tmp/patch-hermes-autodetect.mjs "$$PC_NM" 2>&1 || echo "patch failed (non-fatal)"
+          fi
+        fi
 
         if [ ! -f /data/instances/default/config.json ]; then
           timeout --preserve-status 25 runuser -u node -- paperclipai onboard -y --bind lan --data-dir /data
