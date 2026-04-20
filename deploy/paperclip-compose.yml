@@ -16,6 +16,7 @@ services:
       HERMES_AUTODETECT_PATCH_URL: https://raw.githubusercontent.com/Zakariakhchiche/ai-company-stack/main/deploy/patches/patch-hermes-autodetect.mjs
     volumes:
       - /root/paperclip-data:/data
+      - /root/hermes-home:/home/node/.hermes
     command:
       - bash
       - -c

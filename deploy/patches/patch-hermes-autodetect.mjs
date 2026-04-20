@@ -331,16 +331,16 @@ if (accessSrc.includes('provider: "ollama-cloud"')) {
 // ───────────────────────────────────────────────────────────────
 let heartbeatSrc = readMustExist(heartbeatPath);
 
-const hbMarker = "const HEARTBEAT_MAX_CONCURRENT_RUNS_DEFAULT = 1;";
-const hbReplacement = "const HEARTBEAT_MAX_CONCURRENT_RUNS_DEFAULT = 4;";
+const hbRegex = /const HEARTBEAT_MAX_CONCURRENT_RUNS_DEFAULT = \d+;/;
+const hbReplacement = "const HEARTBEAT_MAX_CONCURRENT_RUNS_DEFAULT = 7;";
 
 if (heartbeatSrc.includes(hbReplacement)) {
   console.log("[heartbeat] already patched — skip");
-} else if (!heartbeatSrc.includes(hbMarker)) {
+} else if (!hbRegex.test(heartbeatSrc)) {
   console.error("[heartbeat] marker not found");
   process.exit(12);
 } else {
-  heartbeatSrc = heartbeatSrc.replace(hbMarker, hbReplacement);
+  heartbeatSrc = heartbeatSrc.replace(hbRegex, hbReplacement);
   writeIfChanged(heartbeatPath, heartbeatSrc, "heartbeat");
 }
 
