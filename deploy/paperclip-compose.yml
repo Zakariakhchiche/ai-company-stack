@@ -1,17 +1,19 @@
 name: paperclip-stack
 services:
   paperclip:
-    image: ghcr.io/zakariakhchiche/paperclip-stack:latest
+    image: ghcr.io/zakariakhchiche/ai-company-stack:latest
     container_name: pc_app
     restart: unless-stopped
+    pull_policy: always
     ports:
       - "3100:3100"
     environment:
       OLLAMA_API_KEY: ${OLLAMA_API_KEY}
       OLLAMA_BASE_URL: https://ollama.com/v1
       NODE_ENV: production
+      PYTHONIOENCODING: utf-8
+      PYTHONUTF8: "1"
       BETTER_AUTH_TRUSTED_ORIGINS: http://72.60.89.217:3100,http://localhost:3100,http://127.0.0.1:3100,http://srv1399420.hstgr.cloud:3100
-      HERMES_AUTODETECT_PATCH_B64: ${HERMES_AUTODETECT_PATCH_B64}
     volumes:
       - /root/paperclip-data:/data
     command:
@@ -19,7 +21,9 @@ services:
       - -c
       - |
         set +e
-        mkdir -p /data /home/node/.hermes && chown -R node:node /data /home/node
+        mkdir -p /data /home/node/.hermes
+        chown -R node:node /data /home/node
+
         cat > /home/node/.hermes/config.yaml <<EOF
         model:
           provider: custom
@@ -36,27 +40,11 @@ services:
         EOF
         chown -R node:node /home/node/.hermes
 
-        # ── Patch paperclipai so the UI hermes_local model dropdown
-        #    autodetects Ollama Cloud models at runtime (36 models live
-        #    from ollama.com/v1/models). No hardcoded catalog.
-        PC_BIN=$$(command -v paperclipai)
-        if [ -n "$$PC_BIN" ]; then
-          PC_NM=$$(node -e 'const p=require.resolve("paperclipai"); console.log(require("path").dirname(p)+"/../node_modules");' 2>/dev/null)
-          [ -z "$$PC_NM" ] && PC_NM="/usr/local/lib/node_modules/paperclipai/node_modules"
-          if [ -d "$$PC_NM" ]; then
-            mkdir -p /tmp/pc-patches
-            echo "$$HERMES_AUTODETECT_PATCH_B64" | base64 -d > /tmp/pc-patches/patch-hermes-autodetect.mjs
-            echo ">> patching paperclipai at $$PC_NM"
-            node /tmp/pc-patches/patch-hermes-autodetect.mjs "$$PC_NM" 2>&1 || echo "patch failed (non-fatal)"
-          else
-            echo ">> paperclipai node_modules not found — skip patch"
-          fi
-        fi
-
         if [ ! -f /data/instances/default/config.json ]; then
           timeout --preserve-status 25 runuser -u node -- paperclipai onboard -y --bind lan --data-dir /data
         fi
         runuser -u node -- node -e 'const f=require("fs");const p="/data/instances/default/config.json";const c=JSON.parse(f.readFileSync(p));c.server=c.server||{};c.server.allowedHostnames=[...new Set([...(c.server.allowedHostnames||[]),"72.60.89.217","srv1399420.hstgr.cloud","localhost","127.0.0.1"])];c.server.publicBaseUrl="http://72.60.89.217:3100";c.auth=c.auth||{};c.auth.baseUrlMode="explicit";c.auth.publicBaseUrl="http://72.60.89.217:3100";c.auth.trustedOrigins=["http://72.60.89.217:3100","http://localhost:3100","http://127.0.0.1:3100","http://srv1399420.hstgr.cloud:3100"];f.writeFileSync(p,JSON.stringify(c,null,2));'
+
         CP=""
         [ -f /data/admin-creds.env ] && CP=$$(grep '^ADMIN_PASSWORD=' /data/admin-creds.env | cut -d= -f2)
         if [ -z "$$CP" ]; then
@@ -65,11 +53,22 @@ services:
           chmod 600 /data/admin-creds.env
         fi
         . /data/admin-creds.env
+
         echo ">> hermes: $$(hermes --version 2>&1 | head -1)"
-        runuser -u node -- env HOME=/home/node OLLAMA_API_KEY="${OLLAMA_API_KEY}" OLLAMA_BASE_URL="https://ollama.com/v1" paperclipai run --data-dir /data > /tmp/pc.log 2>&1 &
+        echo ">> paperclipai: $$(paperclipai --version 2>&1 | head -1)"
+
+        runuser -u node -- env HOME=/home/node \
+          OLLAMA_API_KEY="${OLLAMA_API_KEY}" OLLAMA_BASE_URL="https://ollama.com/v1" \
+          PYTHONIOENCODING=utf-8 PYTHONUTF8=1 \
+          paperclipai run --data-dir /data > /tmp/pc.log 2>&1 &
         PC_PID=$$!
-        for i in $$(seq 1 90); do sleep 2; [ "$$(curl -s -o /dev/null -w "%{http_code}" --max-time 3 http://localhost:3100/api/health 2>&1)" = "200" ] && break; done
+
+        for i in $$(seq 1 90); do
+          sleep 2
+          [ "$$(curl -s -o /dev/null -w "%{http_code}" --max-time 3 http://localhost:3100/api/health 2>&1)" = "200" ] && break
+        done
         sleep 3
+
         SJ=$$(curl -sS -c /tmp/c.txt -X POST http://localhost:3100/api/auth/sign-in/email -H "Content-Type: application/json" -d "{\"email\":\"$$ADMIN_EMAIL\",\"password\":\"$$ADMIN_PASSWORD\"}")
         if ! echo "$$SJ" | grep -q '"token"'; then
           curl -sS -c /tmp/c.txt -X POST http://localhost:3100/api/auth/sign-up/email -H "Content-Type: application/json" -d "{\"email\":\"$$ADMIN_EMAIL\",\"password\":\"$$ADMIN_PASSWORD\",\"name\":\"Admin\"}" >/dev/null
@@ -78,5 +77,6 @@ services:
         INV=$$(echo "$$CLI_OUT" | grep -oE 'pcp_bootstrap_[a-f0-9]+' | tail -1)
         O="http://localhost:3100"
         curl -sS -b /tmp/c.txt -H "Origin: $$O" -H "Referer: $$O/" -X POST "$$O/api/invites/$$INV/accept" -H "Content-Type: application/json" -d '{"requestType":"human"}' >/dev/null
+
         echo "=== DONE === email=$$ADMIN_EMAIL password=$$ADMIN_PASSWORD"
         wait $$PC_PID

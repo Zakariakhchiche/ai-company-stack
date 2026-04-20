@@ -33,6 +33,8 @@ const hermesExecutePath = path.join(nodeModulesDir, "hermes-paperclip-adapter/di
 const hermesBuildConfigPath = path.join(nodeModulesDir, "hermes-paperclip-adapter/dist/ui/build-config.js");
 const registryPath = path.join(nodeModulesDir, "@paperclipai/server/dist/adapters/registry.js");
 const routesPath = path.join(nodeModulesDir, "@paperclipai/server/dist/routes/adapters.js");
+const approvalsPath = path.join(nodeModulesDir, "@paperclipai/server/dist/services/approvals.js");
+const accessPath = path.join(nodeModulesDir, "@paperclipai/server/dist/routes/access.js");
 
 function readMustExist(p) {
   if (!fs.existsSync(p)) {
@@ -261,5 +263,64 @@ if (!routesAlreadyPatched) {
 }
 
 writeIfChanged(routesPath, routesSrc, "routes");
+
+// ───────────────────────────────────────────────────────────────
+// 4. paperclipai services/approvals.js — make hire_agent approvals
+//    default to hermes_local + ollama-cloud instead of "process"
+//    with an empty config. Without this, every "hire CTO/Engineer/..."
+//    approval creates a broken agent that fails on first heartbeat.
+// ───────────────────────────────────────────────────────────────
+let approvalsSrc = readMustExist(approvalsPath);
+
+const approvalsMarker = `adapterType: String(payload.adapterType ?? "process"),
+                        adapterConfig: typeof payload.adapterConfig === "object" && payload.adapterConfig !== null
+                            ? payload.adapterConfig
+                            : {},`;
+const approvalsReplacement = `adapterType: String(payload.adapterType ?? "hermes_local"),
+                        adapterConfig: (typeof payload.adapterConfig === "object" && payload.adapterConfig !== null && Object.keys(payload.adapterConfig).length > 0)
+                            ? payload.adapterConfig
+                            : { model: "glm-5.1", provider: "ollama-cloud", timeoutSec: 1800, graceSec: 15, persistSession: true, quiet: true },`;
+
+if (approvalsSrc.includes('provider: "ollama-cloud"')) {
+  console.log("[approvals] already patched — skip");
+} else {
+  if (!approvalsSrc.includes(approvalsMarker)) {
+    console.error("[approvals] marker not found");
+    process.exit(10);
+  }
+  approvalsSrc = approvalsSrc.replace(approvalsMarker, approvalsReplacement);
+  writeIfChanged(approvalsPath, approvalsSrc, "approvals");
+}
+
+// ───────────────────────────────────────────────────────────────
+// 5. paperclipai routes/access.js — same default fix for agents
+//    created via the join-request acceptance path. Without this,
+//    any agent joining through an invite link gets adapterType=process
+//    and an empty config too.
+// ───────────────────────────────────────────────────────────────
+let accessSrc = readMustExist(accessPath);
+
+const accessMarker = `adapterType: existing.adapterType ?? "process",
+                adapterConfig: existing.agentDefaultsPayload &&
+                    typeof existing.agentDefaultsPayload === "object"
+                    ? existing.agentDefaultsPayload
+                    : {},`;
+const accessReplacement = `adapterType: existing.adapterType ?? "hermes_local",
+                adapterConfig: (existing.agentDefaultsPayload &&
+                    typeof existing.agentDefaultsPayload === "object" &&
+                    Object.keys(existing.agentDefaultsPayload).length > 0)
+                    ? existing.agentDefaultsPayload
+                    : { model: "glm-5.1", provider: "ollama-cloud", timeoutSec: 1800, graceSec: 15, persistSession: true, quiet: true },`;
+
+if (accessSrc.includes('provider: "ollama-cloud"')) {
+  console.log("[access] already patched — skip");
+} else {
+  if (!accessSrc.includes(accessMarker)) {
+    console.error("[access] marker not found");
+    process.exit(11);
+  }
+  accessSrc = accessSrc.replace(accessMarker, accessReplacement);
+  writeIfChanged(accessPath, accessSrc, "access");
+}
 
 console.log("done.");
