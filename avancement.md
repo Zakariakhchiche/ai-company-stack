@@ -1,10 +1,89 @@
 # Avancement — AI Company stack (Profil B)
 
-Dernière mise à jour : 2026-04-17
+Dernière mise à jour : 2026-04-21 (on reprend demain)
 
 ---
 
-## 1. État global
+## 0. Où on en est (session 2026-04-20 → 21)
+
+VPS Hostinger `72.60.89.217:3100` en production. Paperclip démarre en ~2 min via compose inline (`node:20-bookworm-slim` + `npm install paperclipai` + `pip install hermes-agent` + download+apply du patch script depuis GitHub raw main). Creds admin : `admin@paperclip.local` / `WYux3LWqj1OMYi21`.
+
+**10 patches runtime** appliqués au boot (`deploy/patches/patch-hermes-autodetect.mjs`) :
+1. `hermes` — `listModels()` dynamique qui fetch live `ollama.com/v1/models`
+2. `hermes-constants` — ajoute `ollama-cloud` + `custom` à `VALID_PROVIDERS`
+3. `registry` — câble `listHermesModels` dans le registry paperclipai
+4-5. `hermes-execute` — injecte `PAPERCLIP_API_KEY=authToken` + ajoute header `Authorization: Bearer $PAPERCLIP_API_KEY` à tous les curl du prompt template
+6. `hermes-buildconfig` — UI wizard défaut `provider=ollama-cloud` (sauf modèles prefix `deepseek/`)
+7. `routes` — `buildAdapterInfo` async + Promise.all pour que `modelsCount` reflète le dynamique
+8. `approvals` — `hire_agent` default `hermes_local` + full config ollama-cloud
+9. `access` — join-request acceptance défaut idem
+10. `heartbeat` — `HEARTBEAT_MAX_CONCURRENT_RUNS_DEFAULT = 7`
+
+Volume `/root/hermes-home:/home/node/.hermes` pour persister les sessions entre redeploys.
+
+### Équipe `fct` (growth/demand-gen)
+- **CEO** (glm-5.1, heartbeat 5min) — orchestration
+- **Engineer** (kimi-k2.6, heartbeat 5min) — FCT-7 chatbot, tech/infra
+- **Designer** (qwen3-vl:235b, heartbeat 5min) — FCT-2 landing pages
+- **RevOps** (glm-5.1, heartbeat 5min) — FCT-3 CRM, FCT-4 funnel, FCT-8 dashboard
+- **SDR** (kimi-k2.5, heartbeat 5min) — FCT-5 LinkedIn, FCT-6 cold email, FCT-10 outreach
+- **Marketing** (deepseek-v3.2, heartbeat 5min) — FCT-9 expert marketing
+
+Tous `reportsTo=CEO`, `maxConcurrentRuns=7`.
+
+### CI/CD GHCR
+- GHA workflow build+push `ghcr.io/zakariakhchiche/ai-company-stack:latest` à chaque commit sur main touchant `deploy/`
+- Image publique (`visibility=public`) mais **Hostinger's daemon refuse de la pull avec `denied`** — probable auth cache stale d'un essai précédent avec image privée. Fallback sur compose inline qui marche. Pour unblock il faut SSH au VPS + `docker logout ghcr.io`.
+
+---
+
+## TODO — à reprendre demain
+
+### Prioritaire
+1. **Créer le Reviewer/COO dans fct** (interrompu par overload VPS)
+   - `name=Reviewer`, `title="COO — Quality & Review"`, `model=kimi-k2.6`, `reportsTo=CEO`, heartbeat 5min
+   - Écrire `AGENTS.md` avec mandat : audite issues `in_review` → approve (→`done`) ou reject (→`todo` + feedback précis), never execute tasks himself, priorize by `priority` field
+   - Objectif : couche de contrôle qualité avant que les specialists ferment les tickets
+
+2. **Appliquer la fiche de poste "Head of Outreach" au SDR** (fct)
+   - Mettre à jour le `title` de l'agent SDR `85e0d5dd` en "Head of Outreach"
+   - Écrire le AGENTS.md avec la fiche complète fournie par Zak : recruteur exigeant 10+ ans cold email/LinkedIn/scraping, deliverability, anti-ban, funnel outbound, KPI (ouverture/réponse/RDV/coût lead), ton direct/sans compromis, challenge tout profil médiocre
+   - Il pilote FCT-5, FCT-6, FCT-10
+
+3. **Diagnose overload VPS** : avec 6 agents heartbeat 5min + `maxConcurrentRuns=7`, l'API 3100 a timeouté plusieurs minutes. Options :
+   - Passer heartbeat à `intervalSec=600` (10 min) sur tous
+   - OU passer `maxConcurrentRuns` à 3-4 (7 était trop agressif pour 1 VPS)
+   - OU upgrader le VPS Hostinger
+
+### Moyen terme
+4. **Forcer workflow `in_review`** : patch pour que les specialists doivent passer par `in_review` avant `done`, sinon le Reviewer ne voit rien passer. Probablement via prompt template patch dans `hermes-paperclip-adapter/dist/server/execute.js`.
+5. **GHCR auth cache sur Hostinger** : SSH (pas dispo via API) puis `docker logout ghcr.io` → compose passe sur image pré-bakée (boot 15s au lieu de 2min).
+6. **test company CTO** : run timed_out historique, investiguer model/prompt.
+7. **Descriptions/missions** sur les autres sociétés.
+
+### Nice to have
+8. **Budget mensuel** sur chaque company (actuellement 0).
+9. **Purge définitive** des 3 sociétés archivées dans Postgres (FK cascade bug dans paperclipai empêche la vraie suppression API).
+10. **Board approval obligatoire** pour hire_agent — validé mais à retester après le patch `approvals.js`.
+
+### Fiche de poste Head of Outreach (à ranger dans l'AGENTS.md du SDR demain)
+
+> Tu es un Head of Outreach élite, spécialisé dans la génération massive de leads qualifiés via des stratégies d'outbound avancées. 10+ ans en cold email, LinkedIn automation, scraping, growth hacking. Millions d'euros de pipeline généré. Machines d'acquisition scalables et résistantes aux bans. À la fois recruteur exigeant, opérateur terrain et expert technique (scraping, deliverability, anti-ban).
+>
+> **Missions** :
+> 1. Recruter le meilleur expert outreach possible — profil idéal : Lemlist/Instantly/Smartlead, Phantombuster/Waalaxy, Apollo/Dropcontact, SPF/DKIM/DMARC/warming/rotation IP-domaines, copywriting short-impactant, funnel complet prospect→RDV→closing, résultats chiffrés obligatoires.
+> 2. Interview exigeante : scaling cold email sans blacklist ? contournement protections LinkedIn ? combien de domaines pour 10k emails/jour ? campagne chiffrée ? passer un taux de réponse de 1% à 5% ?
+> 3. Machine outreach complète — scraping massif + enrichissement + multi-touch (email + LinkedIn + relance) + A/B testing + segmentation.
+> 4. Anti-ban & cybersécurité — travailler avec le CTO pour IP rotation, comptes, contournement anti-bot. Zéro stratégie naïve.
+> 5. KPI : taux ouverture / réponse / RDV / coût par lead. Objectif : maximiser les RDV qualifiés.
+>
+> Fonctionnement : challenge le profil/stratégie, identifie les faiblesses, propose une version améliorée, donne des actions concrètes, priorise les quick wins. Style direct, exigeant, sans compromis, focus résultat.
+>
+> Objectif final : machine d'outreach capable de générer des leads tous les jours, scaler sans se bloquer, alimenter une équipe de closers en continu.
+
+---
+
+## 1. État global (ancien — avant 2026-04-20)
 
 Le scaffold complet est livré, 4 services applicatifs tournent, l'onboarding Paperclip + un crew CrewAI + un graphe LangGraph ont été validés avec Ollama Cloud comme LLM unique. Un commit git initial est prêt, il manque l'authentification GitHub pour créer le dépôt distant et pousser.
 
