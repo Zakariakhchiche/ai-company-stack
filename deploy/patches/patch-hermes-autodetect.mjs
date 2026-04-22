@@ -36,6 +36,22 @@ const routesPath = path.join(nodeModulesDir, "@paperclipai/server/dist/routes/ad
 const approvalsPath = path.join(nodeModulesDir, "@paperclipai/server/dist/services/approvals.js");
 const accessPath = path.join(nodeModulesDir, "@paperclipai/server/dist/routes/access.js");
 const heartbeatPath = path.join(nodeModulesDir, "@paperclipai/server/dist/services/heartbeat.js");
+const routesAgentsPath = path.join(nodeModulesDir, "@paperclipai/server/dist/routes/agents.js");
+const servicesAgentsPath = path.join(nodeModulesDir, "@paperclipai/server/dist/services/agents.js");
+
+// ───────────────────────────────────────────────────────────────
+// Resilience helpers (warn-not-exit): instead of exiting on a missing
+// marker, we log a WARN and continue. This ensures the pc_app container
+// still boots even if a single patch rule drifts after a paperclipai
+// update. We print a summary at the end so ops can tell which patches
+// didn't take.
+// ───────────────────────────────────────────────────────────────
+const __patchLog = { applied: [], skipped: [], missing: [] };
+function warnMissingMarker(label, hint) {
+  const line = hint ? `[${label}] MARKER NOT FOUND — ${hint}` : `[${label}] MARKER NOT FOUND`;
+  console.warn(line);
+  __patchLog.missing.push(label);
+}
 
 function readMustExist(p) {
   if (!fs.existsSync(p)) {
@@ -344,4 +360,114 @@ if (heartbeatSrc.includes(hbReplacement)) {
   writeIfChanged(heartbeatPath, heartbeatSrc, "heartbeat");
 }
 
+// ───────────────────────────────────────────────────────────────
+// 7. paperclipai routes/agents.js — default direct POST agent
+//    creation to hermes_local + ollama-cloud. Catches the API flow
+//    (curl, automations, agents creating other agents) which bypasses
+//    UI wizard + approvals + invites. Warn-not-exit: if markers drift
+//    the container still boots.
+// ───────────────────────────────────────────────────────────────
+if (fs.existsSync(routesAgentsPath)) {
+  let routesAgentsSrc = fs.readFileSync(routesAgentsPath, "utf8");
+
+  // Already-applied sentinel: any occurrence of our injected defaults.
+  const sentinel = '"ollama-cloud"';
+  if (routesAgentsSrc.includes(sentinel) && /adapterType:\s*["']hermes_local["']/.test(routesAgentsSrc)) {
+    console.log("[routes-agents] already patched — skip");
+    __patchLog.skipped.push("routes-agents");
+  } else {
+    // Pattern A: `adapterType: payload.adapterType ?? "process"`
+    // Pattern B: `adapterType: String(payload.adapterType ?? "process")`
+    // Pattern C: `adapterType: body.adapterType ?? "process"`
+    const adapterTypeRx = /adapterType:\s*(String\()?([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\?\?\s*"process"(\))?/g;
+    const adapterConfigRx = /adapterConfig:\s*([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\?\?\s*\{\s*\}/g;
+    // More literal fallback pattern for `: {},` after `adapterConfig:` with ternary
+    const ternaryEmptyConfigRx =
+      /adapterConfig:\s*typeof\s+([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*===\s*"object"\s*&&\s*\1\s*!==\s*null\s*\?\s*\1\s*:\s*\{\s*\}/g;
+
+    let changed = false;
+    const OLL_DEFAULT = '{ model: "glm-5.1", provider: "ollama-cloud", timeoutSec: 1800, graceSec: 15, persistSession: true, quiet: true }';
+
+    const beforeA = routesAgentsSrc;
+    routesAgentsSrc = routesAgentsSrc.replace(adapterTypeRx, (m, s, expr, c) =>
+      `adapterType: ${s ? "String(" : ""}${expr} ?? "hermes_local"${s ? ")" : ""}`
+    );
+    if (routesAgentsSrc !== beforeA) { changed = true; }
+
+    const beforeB = routesAgentsSrc;
+    routesAgentsSrc = routesAgentsSrc.replace(adapterConfigRx, (m, expr) =>
+      `adapterConfig: (${expr} && Object.keys(${expr}).length > 0) ? ${expr} : ${OLL_DEFAULT}`
+    );
+    if (routesAgentsSrc !== beforeB) { changed = true; }
+
+    const beforeC = routesAgentsSrc;
+    routesAgentsSrc = routesAgentsSrc.replace(ternaryEmptyConfigRx, (m, expr) =>
+      `adapterConfig: (typeof ${expr} === "object" && ${expr} !== null && Object.keys(${expr}).length > 0) ? ${expr} : ${OLL_DEFAULT}`
+    );
+    if (routesAgentsSrc !== beforeC) { changed = true; }
+
+    if (changed) {
+      writeIfChanged(routesAgentsPath, routesAgentsSrc, "routes-agents");
+      __patchLog.applied.push("routes-agents");
+    } else {
+      warnMissingMarker("routes-agents", "no adapterType/adapterConfig fallback pattern found in routes/agents.js");
+    }
+  }
+} else {
+  warnMissingMarker("routes-agents", `file not present at ${routesAgentsPath}`);
+}
+
+// ───────────────────────────────────────────────────────────────
+// 8. paperclipai services/agents.js — same defaults at the service
+//    layer. Paperclip may normalize creates through a central service
+//    even when the route skips that path. Tolerant regex; no-op if
+//    nothing matches.
+// ───────────────────────────────────────────────────────────────
+if (fs.existsSync(servicesAgentsPath)) {
+  let servicesAgentsSrc = fs.readFileSync(servicesAgentsPath, "utf8");
+
+  const alreadyPatched = servicesAgentsSrc.includes('"ollama-cloud"');
+  if (alreadyPatched) {
+    console.log("[services-agents] already patched — skip");
+    __patchLog.skipped.push("services-agents");
+  } else {
+    const adapterTypeRx = /adapterType:\s*(String\()?([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\?\?\s*"process"(\))?/g;
+    const emptyConfigFallbackRx =
+      /adapterConfig:\s*([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\?\?\s*\{\s*\}/g;
+
+    const OLL_DEFAULT = '{ model: "glm-5.1", provider: "ollama-cloud", timeoutSec: 1800, graceSec: 15, persistSession: true, quiet: true }';
+
+    let changed = false;
+    const before1 = servicesAgentsSrc;
+    servicesAgentsSrc = servicesAgentsSrc.replace(adapterTypeRx, (m, s, expr, c) =>
+      `adapterType: ${s ? "String(" : ""}${expr} ?? "hermes_local"${s ? ")" : ""}`
+    );
+    if (servicesAgentsSrc !== before1) { changed = true; }
+    const before2 = servicesAgentsSrc;
+    servicesAgentsSrc = servicesAgentsSrc.replace(emptyConfigFallbackRx, (m, expr) =>
+      `adapterConfig: (${expr} && Object.keys(${expr}).length > 0) ? ${expr} : ${OLL_DEFAULT}`
+    );
+    if (servicesAgentsSrc !== before2) { changed = true; }
+
+    if (changed) {
+      writeIfChanged(servicesAgentsPath, servicesAgentsSrc, "services-agents");
+      __patchLog.applied.push("services-agents");
+    } else {
+      warnMissingMarker("services-agents", "no adapterType/adapterConfig fallback pattern found in services/agents.js");
+    }
+  }
+} else {
+  warnMissingMarker("services-agents", `file not present at ${servicesAgentsPath}`);
+}
+
+// ───────────────────────────────────────────────────────────────
+// Final summary — ops can read this in /tmp/pc.log to know what
+// drifted. Non-zero exit reserved for catastrophic failures only.
+// ───────────────────────────────────────────────────────────────
+console.log("");
+console.log("=== patch summary ===");
+console.log("applied  :", __patchLog.applied.join(", ") || "(none)");
+console.log("skipped  :", __patchLog.skipped.join(", ") || "(none)");
+console.log("missing  :", __patchLog.missing.join(", ") || "(none)");
+console.log("=====================");
 console.log("done.");
