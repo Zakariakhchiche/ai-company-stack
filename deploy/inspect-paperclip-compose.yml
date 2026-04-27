@@ -1,0 +1,55 @@
+name: inspect-paperclip
+services:
+  inspect:
+    image: docker:24-cli
+    container_name: pc_inspect
+    restart: "no"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /root/paperclip-data:/out
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        DUMP=/out/.inspect-$$(date -u +%Y%m%d_%H%M)
+        mkdir -p "$$DUMP"
+
+        echo "=== List paperclipai routes ==="
+        docker exec pc_app sh -c "ls /usr/local/lib/node_modules/paperclipai/node_modules/@paperclipai/server/dist/routes/ 2>/dev/null || find / -name routes -type d 2>/dev/null | head"
+
+        echo ""
+        echo "=== List paperclipai services ==="
+        docker exec pc_app sh -c "ls /usr/local/lib/node_modules/paperclipai/node_modules/@paperclipai/server/dist/services/ 2>/dev/null"
+
+        echo ""
+        echo "=== Dump routes/agents.js (or similar) ==="
+        for f in agents.js agent.js; do
+          docker exec pc_app cat "/usr/local/lib/node_modules/paperclipai/node_modules/@paperclipai/server/dist/routes/$$f" > "$$DUMP/routes-$$f" 2>&1 && echo "saved routes-$$f"
+        done
+
+        echo ""
+        echo "=== Dump services/agents.js (or similar) ==="
+        for f in agents.js agent.js agent-service.js; do
+          docker exec pc_app cat "/usr/local/lib/node_modules/paperclipai/node_modules/@paperclipai/server/dist/services/$$f" > "$$DUMP/services-$$f" 2>&1 && echo "saved services-$$f"
+        done
+
+        echo ""
+        echo "=== Dump companies routes (for naming display) ==="
+        for f in companies.js company.js workspaces.js; do
+          docker exec pc_app cat "/usr/local/lib/node_modules/paperclipai/node_modules/@paperclipai/server/dist/routes/$$f" > "$$DUMP/routes-$$f" 2>&1 && echo "saved routes-$$f"
+        done
+
+        echo ""
+        echo "=== Dump workspace / codebase services ==="
+        for f in workspaces.js workspace.js codebase.js managed-folder.js projects.js; do
+          docker exec pc_app cat "/usr/local/lib/node_modules/paperclipai/node_modules/@paperclipai/server/dist/services/$$f" > "$$DUMP/services-$$f" 2>&1 && echo "saved services-$$f"
+        done
+
+        echo ""
+        echo "=== Files created ==="
+        ls -la "$$DUMP/"
+
+        echo ""
+        echo "Inspect done. Sleeping 10s."
+        sleep 10

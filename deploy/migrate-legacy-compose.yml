@@ -1,0 +1,76 @@
+name: migrate-legacy
+services:
+  migrator:
+    image: alpine:3.19
+    container_name: pc_migrator
+    restart: "no"
+    volumes:
+      - /root/paperclip-data:/data
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        LEGACY=/data/instances/default/projects/c040ccd1-db4d-4ccd-9235-8febd6e2c34e/36f5ab60-4e28-4178-8aee-d001f34cf752/_default
+        cd "$$LEGACY"
+
+        echo "=== BEFORE ==="
+        ls -la
+
+        # Rename flat MD files with FCT-X prefix
+        [ -f HIRING_PLAN.md ] && mv HIRING_PLAN.md FCT-1__HIRING_PLAN.md || echo "HIRING_PLAN.md already renamed"
+        [ -f CRO_RECRUITMENT.md ] && mv CRO_RECRUITMENT.md FCT-9__CRO_RECRUITMENT.md || echo "CRO_RECRUITMENT.md already renamed"
+        [ -f OUTREACH_RECRUITMENT.md ] && mv OUTREACH_RECRUITMENT.md FCT-10__OUTREACH_RECRUITMENT.md || echo "OUTREACH_RECRUITMENT.md already renamed"
+
+        # Rename folders with FCT-X prefix
+        [ -d landing-pages ] && mv landing-pages FCT-2__landing-pages || echo "landing-pages already renamed"
+        [ -d lead-funnel ] && mv lead-funnel FCT-4__lead-funnel || echo "lead-funnel already renamed"
+        [ -d outreach ] && mv outreach FCT-5-6-10__outreach || echo "outreach already renamed"
+        [ -d sales-chatbot ] && mv sales-chatbot FCT-7__sales-chatbot || echo "sales-chatbot already renamed"
+        [ -d dashboard ] && mv dashboard FCT-8__dashboard || echo "dashboard already renamed"
+
+        # Create index README at root of _legacy_v0 / _default
+        cat > README.md <<'EOF'
+        # Legacy v0 — fct deliverables (archived 2026-04-21)
+
+        These deliverables were produced by the v0 agent setup (before Cycle 1 reset). They violate the current Definition of Done:
+
+        - Generic folder names (landing-pages/, sales-chatbot/) with no FCT-X issue prefix
+        - Missing README.md inside deliverable folders
+        - Broken UTF-8 accents in HTML landings (Problemes, Deploiement, Taches)
+        - Inconsistent branding across files (FCT vs "AI Solutions Pro")
+        - 10+ form fields on landing forms (quality bar = 3 max)
+        - No FAQ section on landings, no public pricing, no real social proof
+        - Unverified stats ("80% automatisation en moyenne" without source)
+
+        They are preserved here as **reference material** for Cycle 1 rewrites. Do NOT edit them in place — the corresponding v2 issues will rewrite to the new standard in the proper project folders.
+
+        ## Mapping legacy -> replacement
+
+        | Legacy path | Legacy FCT (archived) | Replacement in v2 |
+        |---|---|---|
+        | `FCT-1__HIRING_PLAN.md` | FCT-1 Hire first engineer | Kept as historical record (engineer hired, now CTO + new Engineer IC) |
+        | `FCT-2__landing-pages/ai-landing.html` | FCT-2 (Designer) | FCT-13 (Engineer, Cycle 1 bet) |
+        | `FCT-2__landing-pages/formation-landing.html` | FCT-2 (Designer) | FCT-14 (Engineer, Cycle 2 backlog) |
+        | `FCT-2__landing-pages/conseil-landing.html` | FCT-2 (Designer) | FCT-15 (Engineer, Cycle 2 backlog) |
+        | `FCT-2__landing-pages/portage-landing.html` | FCT-2 (Designer) | FCT-16 (Engineer, Cycle 2 backlog) |
+        | `FCT-4__lead-funnel/` | FCT-4 (RevOps) | FCT-22 ROI calc + FCT-23 booking flow |
+        | `FCT-5-6-10__outreach/` | FCT-5 / FCT-6 / FCT-10 (SDR) | FCT-19 ICP + FCT-20 cold email + FCT-21 LinkedIn |
+        | `FCT-7__sales-chatbot/` | FCT-7 (Engineer) | FCT-17 Chatbot RAG upgrade |
+        | `FCT-8__dashboard/` | FCT-8 (RevOps) | FCT-18 Dashboard on real data |
+        | `FCT-9__CRO_RECRUITMENT.md` | FCT-9 (HoG) | Superseded by FCT-24 positioning (no standalone recruitment doc needed anymore) |
+        | `FCT-10__OUTREACH_RECRUITMENT.md` | FCT-10 (SDR) | Superseded by FCT-19/20/21 + Cycle 2 hiring if needed |
+
+        ## Access
+
+        Read-only via file-viewer: http://72.60.89.217:8082/fct/_legacy_v0/_default/
+
+        New deliverables go in `fct/growth/`, `fct/product/`, `fct/brand/`, `fct/ops/`, `fct/audit/`.
+        EOF
+
+        echo ""
+        echo "=== AFTER ==="
+        ls -la
+        echo ""
+        echo "Migration complete. Container will sleep 60s and exit."
+        sleep 60

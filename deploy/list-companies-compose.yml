@@ -1,0 +1,43 @@
+name: list-companies
+services:
+  lister:
+    image: docker:24-cli
+    container_name: pc_lister
+    restart: "no"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        echo "=== Login as admin ==="
+        docker exec pc_app sh -c '
+          set -e
+          rm -f /tmp/c-list.txt
+          . /data/admin-creds.env
+          R=$$(curl -sS -c /tmp/c-list.txt -X POST http://localhost:3100/api/auth/sign-in/email \
+            -H "Content-Type: application/json" \
+            -d "{\"email\":\"$$ADMIN_EMAIL\",\"password\":\"$$ADMIN_PASSWORD\"}")
+          echo "login response: $$(echo $$R | head -c 120)"
+        '
+
+        echo ""
+        echo "=== GET /api/companies ==="
+        docker exec pc_app sh -c '
+          curl -sS -b /tmp/c-list.txt -w "\nHTTP %{http_code}\n" http://localhost:3100/api/companies
+        '
+
+        echo ""
+        echo "=== Fallback: list company dirs in /data ==="
+        docker exec pc_app sh -c 'ls -la /data/ 2>&1 | head -40'
+
+        echo ""
+        echo "=== Try /data/instances/default subdirs ==="
+        docker exec pc_app sh -c 'ls -la /data/instances/default/ 2>&1 | head -40 || true'
+
+        echo ""
+        echo "=== Try DB file list ==="
+        docker exec pc_app sh -c 'find /data -name "*.db" -o -name "*.sqlite*" 2>/dev/null | head -10'
+
+        sleep 5

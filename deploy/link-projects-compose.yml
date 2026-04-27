@@ -1,0 +1,35 @@
+name: link-projects
+services:
+  linker:
+    image: alpine:3.19
+    container_name: pc_linker
+    restart: "no"
+    volumes:
+      - /root/paperclip-data:/data
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        cd /data/instances/default/projects
+
+        # Company-level alias: fct -> <company-uuid>
+        ln -sfn c040ccd1-db4d-4ccd-9235-8febd6e2c34e fct
+
+        # Project-level aliases inside fct company folder
+        cd c040ccd1-db4d-4ccd-9235-8febd6e2c34e
+        ln -sfn a18c3d57-ebea-4b3e-9ea5-2a6ef19fb213 growth
+        ln -sfn 37347ff6-bc73-4085-8d35-155114627466 product
+        ln -sfn 7a20674f-8897-46bc-bb03-23689cfa1b6c brand
+        ln -sfn 8d1a326e-cd31-40c1-be68-62b44e0aa1b6 ops
+        ln -sfn cbbca040-54a9-4aac-a55f-6ececbf1e719 audit
+        ln -sfn 36f5ab60-4e28-4178-8aee-d001f34cf752 _legacy_v0
+
+        echo "=== projects/ ==="
+        ls -la /data/instances/default/projects/ | head -20
+        echo ""
+        echo "=== projects/fct/ ==="
+        ls -la /data/instances/default/projects/fct/ | head -20
+        echo ""
+        echo "Symlinks created. Sleeping 60s then exiting."
+        sleep 60

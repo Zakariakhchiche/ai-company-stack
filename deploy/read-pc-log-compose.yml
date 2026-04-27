@@ -1,0 +1,41 @@
+name: read-pc-log
+services:
+  reader:
+    image: alpine:3.19
+    container_name: pc_logreader
+    restart: "no"
+    network_mode: "host"
+    volumes:
+      - /root/paperclip-data:/data
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        # pc_app writes its stdout to /tmp/pc.log INSIDE its container.
+        # We can't reach inside it without docker socket.
+        # But paperclip-compose logs the full npm install + patch output
+        # to docker logs. We don't have access here either.
+        # Alternative: the patch writes markers to the paperclipai node_modules
+        # files. If the patch applied, sentinel strings are there. We can
+        # indirectly verify by fetching the paperclip API for a new agent
+        # and checking its default adapterType + adapterConfig.
+        apk add --no-cache curl jq >/dev/null 2>&1 || true
+
+        echo "=== Probe 1: POST /api/companies/<fct>/agents with minimal body ==="
+        echo "Expecting adapterType=hermes_local and adapterConfig with ollama-cloud"
+        echo "(Skipped — requires session cookie, can't do without browser context)"
+
+        echo ""
+        echo "=== Probe 2: fetch patch file from GitHub raw main + verify new sections ==="
+        curl -s "https://raw.githubusercontent.com/Zakariakhchiche/ai-company-stack/main/deploy/patches/patch-hermes-autodetect.mjs" > /tmp/patch.mjs
+        echo "Patch file size: $$(wc -c < /tmp/patch.mjs) bytes"
+        echo ""
+        echo "--- Does patch contain new sections 7 and 8? ---"
+        grep -c "routes-agents" /tmp/patch.mjs && echo "section 7 (routes-agents) present"
+        grep -c "services-agents" /tmp/patch.mjs && echo "section 8 (services-agents) present"
+        grep -c "warnMissingMarker" /tmp/patch.mjs && echo "warn-not-exit helper present"
+
+        echo ""
+        echo "Done."
+        sleep 10

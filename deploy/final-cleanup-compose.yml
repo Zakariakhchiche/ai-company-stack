@@ -1,0 +1,85 @@
+name: final-cleanup
+services:
+  cleanup:
+    image: alpine:3.19
+    container_name: pc_final_cleanup
+    restart: "no"
+    volumes:
+      - /root/paperclip-data:/data
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        TS=$$(date -u +%Y%m%d_%H%M)
+        COMPANY=/data/instances/default/projects/c040ccd1-db4d-4ccd-9235-8febd6e2c34e
+        ARCHIVE=/data/.backups
+        mkdir -p "$$ARCHIVE"
+
+        echo "=== PASS 1: Handle new bad paths from agents mid-session ==="
+
+        # PRODUCT: new product/ nested
+        cd "$$COMPANY/37347ff6-bc73-4085-8d35-155114627466/_default"
+        if [ -d product ]; then
+          echo "Moving product/product/ to archive"
+          mv product "$$ARCHIVE/product-nested-$$TS"
+        fi
+
+        # BRAND: stray B-004, should merge with FCT-27 if exists
+        cd "$$COMPANY/7a20674f-8897-46bc-bb03-23689cfa1b6c/_default"
+        if [ -d B-004__pricing-page ]; then
+          if [ -d FCT-27__pricing-page ]; then
+            # FCT-27 already exists, archive the B-004 duplicate
+            echo "FCT-27 exists, archiving B-004 duplicate"
+            mv B-004__pricing-page "$$ARCHIVE/brand-B-004-$$TS"
+          else
+            echo "No FCT-27, renaming B-004 to FCT-27"
+            mv B-004__pricing-page FCT-27__pricing-page
+          fi
+        fi
+
+        # OPS: stray O-001, should merge with FCT-28
+        cd "$$COMPANY/8d1a326e-cd31-40c1-be68-62b44e0aa1b6/_default"
+        if [ -d O-001__crm-setup ]; then
+          if [ -d FCT-28__crm-setup ]; then
+            echo "FCT-28 exists, archiving O-001 duplicate"
+            mv O-001__crm-setup "$$ARCHIVE/ops-O-001-$$TS"
+          else
+            echo "No FCT-28, renaming O-001 to FCT-28"
+            mv O-001__crm-setup FCT-28__crm-setup
+          fi
+        fi
+
+        echo ""
+        echo "=== PASS 2: Move all _bad_path_backup_* out of projects to $$ARCHIVE ==="
+        for pid in a18c3d57-ebea-4b3e-9ea5-2a6ef19fb213 37347ff6-bc73-4085-8d35-155114627466 7a20674f-8897-46bc-bb03-23689cfa1b6c 8d1a326e-cd31-40c1-be68-62b44e0aa1b6 cbbca040-54a9-4aac-a55f-6ececbf1e719; do
+          cd "$$COMPANY/$$pid/_default" || continue
+          for d in _bad_path_backup_*; do
+            [ -d "$$d" ] || continue
+            # project short name
+            case "$$pid" in
+              a18c3d57*) proj=growth;;
+              37347ff6*) proj=product;;
+              7a20674f*) proj=brand;;
+              8d1a326e*) proj=ops;;
+              cbbca040*) proj=audit;;
+            esac
+            echo "Moving $$pid/$$d -> $$ARCHIVE/$$proj-$$d"
+            mv "$$d" "$$ARCHIVE/$$proj-$$d"
+          done
+        done
+
+        echo ""
+        echo "=== FINAL STATE — view-visible ==="
+        for pid in a18c3d57-ebea-4b3e-9ea5-2a6ef19fb213 37347ff6-bc73-4085-8d35-155114627466 7a20674f-8897-46bc-bb03-23689cfa1b6c 8d1a326e-cd31-40c1-be68-62b44e0aa1b6 cbbca040-54a9-4aac-a55f-6ececbf1e719; do
+          echo "---- $$pid/_default/ ----"
+          ls "$$COMPANY/$$pid/_default/" 2>/dev/null
+        done
+
+        echo ""
+        echo "=== ARCHIVE content ==="
+        ls -la "$$ARCHIVE/" 2>/dev/null
+
+        echo ""
+        echo "Cleanup complete. Sleeping 30s and exiting."
+        sleep 30

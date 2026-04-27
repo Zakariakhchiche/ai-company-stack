@@ -1,0 +1,71 @@
+name: fix-paths
+services:
+  fixer:
+    image: alpine:3.19
+    container_name: pc_fixer
+    restart: "no"
+    volumes:
+      - /root/paperclip-data:/data
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        TS=$$(date -u +%Y%m%d_%H%M)
+        COMPANY=/data/instances/default/projects/c040ccd1-db4d-4ccd-9235-8febd6e2c34e
+
+        echo "=== GROWTH (a18c3d57) — rename G- prefixes ==="
+        cd "$$COMPANY/a18c3d57-ebea-4b3e-9ea5-2a6ef19fb213/_default" || true
+        [ -d G-002__cold-email-seq-t1-ia ] && mv G-002__cold-email-seq-t1-ia FCT-20__cold-email-seq-t1-ia || echo "G-002 already migrated"
+        [ -d G-003__linkedin-seq-t1-conseil ] && mv G-003__linkedin-seq-t1-conseil FCT-21__linkedin-seq-t1-conseil || echo "G-003 already migrated"
+        ls
+
+        echo ""
+        echo "=== PRODUCT (37347ff6) — lift nested + rename ==="
+        cd "$$COMPANY/37347ff6-bc73-4085-8d35-155114627466/_default" || true
+        [ -d product/_default/CTO-ADR-001__tech-stack ] && mv product/_default/CTO-ADR-001__tech-stack FCT-12__tech-stack || echo "CTO-ADR moved or absent"
+        [ -d product/_default/P-002__landing-ai ] && mv product/_default/P-002__landing-ai FCT-13__rewrite-ai-landing || echo "P-002 moved or absent"
+        [ -d product ] && mv product "_bad_path_backup_$$TS" || echo "product/ already cleared"
+        ls
+
+        echo ""
+        echo "=== BRAND (7a20674f) — rename top + lift nested extras ==="
+        cd "$$COMPANY/7a20674f-8897-46bc-bb03-23689cfa1b6c/_default" || true
+        [ -d B-001__positioning-statements ] && mv B-001__positioning-statements FCT-24__positioning-statements || echo "B-001 done"
+        [ -d B-002__design-system ] && mv B-002__design-system FCT-25__design-system || echo "B-002 done"
+        if [ -d brand ]; then
+          if [ -d brand/_default/B-004__pricing-page ] && [ ! -d FCT-27__pricing-page ]; then
+            mv brand/_default/B-004__pricing-page FCT-27__pricing-page
+          fi
+          mv brand "_bad_path_backup_$$TS"
+        fi
+        ls
+
+        echo ""
+        echo "=== OPS (8d1a326e) ==="
+        cd "$$COMPANY/8d1a326e-cd31-40c1-be68-62b44e0aa1b6/_default" || true
+        [ -d O-001__crm-setup ] && mv O-001__crm-setup FCT-28__crm-setup || echo "O-001 done"
+        [ -d ops ] && mv ops "_bad_path_backup_$$TS" || echo "ops/ cleared"
+        ls
+
+        echo ""
+        echo "=== AUDIT (cbbca040) — lift FCT-33 up ==="
+        cd "$$COMPANY/cbbca040-54a9-4aac-a55f-6ececbf1e719/_default" || true
+        if [ -d audit ]; then
+          if [ -d audit/_default/FCT-33__bootstrap-handbook ] && [ ! -d FCT-33__bootstrap-handbook ]; then
+            mv audit/_default/FCT-33__bootstrap-handbook FCT-33__bootstrap-handbook
+          fi
+          mv audit "_bad_path_backup_$$TS"
+        fi
+        ls
+
+        echo ""
+        echo "=== Final ls for each project _default ==="
+        for p in a18c3d57-ebea-4b3e-9ea5-2a6ef19fb213 37347ff6-bc73-4085-8d35-155114627466 7a20674f-8897-46bc-bb03-23689cfa1b6c 8d1a326e-cd31-40c1-be68-62b44e0aa1b6 cbbca040-54a9-4aac-a55f-6ececbf1e719; do
+          echo "---- $$p/_default/ ----"
+          ls "$$COMPANY/$$p/_default/" 2>/dev/null || echo "(empty)"
+        done
+
+        echo ""
+        echo "Fix complete. Sleeping 60s and exiting."
+        sleep 60

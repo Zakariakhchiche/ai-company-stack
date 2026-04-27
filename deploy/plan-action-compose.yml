@@ -1,0 +1,22 @@
+name: plan-action
+services:
+  writer:
+    image: alpine:3.19
+    container_name: pc_plan_writer
+    restart: "no"
+    environment:
+      PLAN_GZ_B64: ${PLAN_GZ_B64}
+    volumes:
+      - /root/paperclip-data:/data
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        TARGET=/data/fct-view/fct/PLAN_ACTION.md
+        echo "$$PLAN_GZ_B64" | base64 -d | gunzip > "$$TARGET"
+        chmod 644 "$$TARGET"
+        echo "=== Written $$TARGET ==="
+        wc -l "$$TARGET"
+        head -8 "$$TARGET"
+        sleep 15

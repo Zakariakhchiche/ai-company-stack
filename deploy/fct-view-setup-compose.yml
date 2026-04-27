@@ -1,0 +1,75 @@
+name: fct-view-setup
+services:
+  setup:
+    image: alpine:3.19
+    container_name: pc_fctview_setup
+    restart: "no"
+    volumes:
+      - /root/paperclip-data:/data
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        VIEW=/data/fct-view
+        # Relative target from VIEW/fct/ to instances dir (2 levels up from fct/, then into instances)
+        REL_BASE=../../instances/default/projects/c040ccd1-db4d-4ccd-9235-8febd6e2c34e
+
+        rm -rf "$$VIEW" 2>/dev/null || true
+        mkdir -p "$$VIEW/fct"
+        cd "$$VIEW/fct"
+
+        ln -sfn "$$REL_BASE/a18c3d57-ebea-4b3e-9ea5-2a6ef19fb213/_default" growth
+        ln -sfn "$$REL_BASE/37347ff6-bc73-4085-8d35-155114627466/_default" product
+        ln -sfn "$$REL_BASE/7a20674f-8897-46bc-bb03-23689cfa1b6c/_default" brand
+        ln -sfn "$$REL_BASE/8d1a326e-cd31-40c1-be68-62b44e0aa1b6/_default" ops
+        ln -sfn "$$REL_BASE/cbbca040-54a9-4aac-a55f-6ececbf1e719/_default" audit
+        ln -sfn "$$REL_BASE/36f5ab60-4e28-4178-8aee-d001f34cf752/_default" _legacy_v0
+
+        cat > README.md <<'EOF'
+        # fct — company deliverables (clean 3-level view)
+
+        Browsing organized as: entreprise / equipe / tache.
+
+        ## Teams
+
+        - growth/   — Outbound, inbound, funnel. Lead: Head of Growth + SDR + Designer.
+        - product/  — Code: landing pages, chatbot, dashboard, CRM. Lead: CTO + Engineer.
+        - brand/    — Positioning, design system, pricing. Lead: Designer + Head of Growth.
+        - ops/      — CRM, metrics, MEDDIC scoring. Lead: RevOps.
+        - audit/    — QA + governance (handbook, audit). Lead: Reviewer.
+        - _legacy_v0/ — Archived v0 (read-reference only).
+
+        ## Task folder naming
+
+        Inside each team: <FCT-X>__<kebab-slug>/ where FCT-X is the Paperclip issue identifier.
+
+        Example: fct/product/FCT-13__rewrite-ai-landing/
+
+        ## Access
+
+        Basic auth: zkhchiche / fct-preview-2026 (read-only).
+        EOF
+
+        cat > "$$VIEW/README.md" <<'EOF'
+        # Paperclip file-viewer — clean hierarchy
+
+        Browse by: entreprise (fct) / equipe (growth, product, ...) / tache (FCT-X__slug).
+        Enter fct/ to start.
+        EOF
+
+        echo "=== $$VIEW ==="
+        ls -la
+        echo ""
+        echo "=== $$VIEW/fct ==="
+        ls -la "$$VIEW/fct"
+        echo ""
+        echo "=== Resolve test ==="
+        for d in growth product brand ops audit _legacy_v0; do
+          echo "-- fct/$$d -> $$(readlink $$VIEW/fct/$$d)"
+          ls "$$VIEW/fct/$$d" 2>&1 | head -5
+        done
+
+        echo ""
+        echo "Setup complete. Sleeping 30s and exiting."
+        sleep 30

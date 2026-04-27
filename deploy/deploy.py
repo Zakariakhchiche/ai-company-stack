@@ -67,13 +67,8 @@ def main():
 
     ollama_key = read_env_value("OLLAMA_API_KEY", envfile)
 
-    patch_path = os.path.join(HERE, "patches/patch-hermes-autodetect.mjs")
-    with open(patch_path, "rb") as f:
-        patch_b64 = base64.b64encode(f.read()).decode("ascii")
-
     env_lines = [
         f"OLLAMA_API_KEY={ollama_key}",
-        f"HERMES_AUTODETECT_PATCH_B64={patch_b64}",
     ]
     env_text = "\n".join(env_lines) + "\n"
 
@@ -83,7 +78,7 @@ def main():
         "environment": env_text,
     }
 
-    print(f"content: {len(content)} bytes | env: {len(env_text)} bytes | patch b64: {len(patch_b64)} chars")
+    print(f"content: {len(content)} bytes | env: {len(env_text)} bytes")
     status, body = call("POST", "/docker", payload)
     print(f"HTTP {status}\n{body[:800]}\n")
     if status >= 400:
