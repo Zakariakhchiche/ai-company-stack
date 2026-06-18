@@ -3,6 +3,7 @@ import os
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+from admin import router as admin_router
 from settings import get_settings
 from sales_crew import SalesCrew
 from support_crew import SupportCrew
@@ -16,6 +17,7 @@ if settings.langsmith_tracing and settings.langsmith_api_key:
     os.environ["LANGCHAIN_PROJECT"] = settings.langsmith_project
 
 app = FastAPI(title="CrewAI API", version="0.1.0")
+app.include_router(admin_router)
 
 
 class SalesRunRequest(BaseModel):
